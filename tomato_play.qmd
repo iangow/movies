@@ -1,0 +1,163 @@
+---
+title: "Quick look at Rotten Tomatoes data"
+author: "Ian D. Gow"
+format: pdf
+---
+
+Here I assume that you have saved the data available [here](https://www.kaggle.com/datasets/andrezaza/clapper-massive-rotten-tomatoes-movies-and-reviews) in a `archive` folder under this project.
+
+I will use the `tidyverse` package for analysis.
+I will use `duckdb` here because it makes queries very fast with very little overhead.^[Use `install.packages(c("tidyverse", "duckdb"))` if necessary.]
+
+```{r}
+#| message: false
+library(tidyverse)
+library(duckdb)
+```
+
+## Load data
+
+Read the data into the database.
+
+```{r}
+db <- dbConnect(duckdb::duckdb())
+movies <- tbl(db, "read_csv_auto('archive/rotten_tomatoes_movies.csv')")
+reviews <- tbl(db, "read_csv_auto('archive/rotten_tomatoes_movie_reviews.csv')")
+```
+
+```{r}
+movies |> count(id) |> count(n)
+```
+
+The result above tells us that are duplicate rows in the `movies` table.
+If we focus on those with a value in `title`, it seems there are complete duplicates (i.e., all rows are duplicated).
+So we can make a new table with unique entries.
+
+```{r}
+movies_unique <-
+  movies |> 
+  filter(!is.na(title)) |> 
+  distinct() 
+```
+
+Now we have no duplicates.
+
+```{r}
+movies_unique |> 
+  count(id) |> 
+  filter(n > 1) |>
+  count() |>
+  pull()
+```
+
+A quick look at the data.
+
+```{r}
+movies_unique |>
+  filter(!is.na(tomatoMeter)) |>
+  count(tomatoMeter) |> 
+  arrange(tomatoMeter) |>
+  filter(tomatoMeter > 55) 
+```
+
+There are also some duplicates in `reviews`.
+Let's make `reviews_unique`:
+
+```{r}
+reviews_unique <-
+  reviews |> 
+  distinct() 
+
+reviews_unique |>
+  count(reviewId) |> 
+  filter(n > 1) |>
+  inner_join(reviews, by = "reviewId") |>
+  count() |>
+  pull()
+```
+
+What values does `reviewState` take?
+Are there missing values?
+
+```{r}
+reviews_unique |>
+  count(reviewState) |>
+  collect()
+
+reviews_unique |>
+  filter(is.na(reviewState)) |>
+  count() |>
+  pull()
+```
+
+## Calculating Tomato Score
+
+Let's calculate tomato score.
+
+```{r}
+scores_calc <-
+  reviews_unique |>
+  mutate(pos_review = as.integer(reviewState == "fresh")) |>
+  group_by(id) |>
+  summarize(tomatoMeter = 100 * mean(pos_review, na.rm = TRUE),
+            num_reviews = n()) |>
+  compute()
+```
+
+Now let's compare calculated values with reported values for a sample.
+
+```{r}
+sample <- 
+  tibble(id = c("american_werewolf_in_paris",
+                "imperium",
+                "welcome_to_happiness",
+                "blood_glacier")) |>
+  copy_to(db, df = _, name = "sample", overwrite = TRUE)
+```
+
+```{r}
+sample |>
+  inner_join(movies_unique, by = "id") |>
+  select(id, title, tomatoMeter) |>
+  inner_join(scores_calc, by = "id")
+```
+
+We can produce a histogram of Tomato Meter ratings using the scores in `movies`.
+
+```{r}
+#| label: fig-hist
+#| fig-cap: Histogram of Tomato Meter ratings
+movies_unique |>
+  filter(!is.na(tomatoMeter)) |>
+  ggplot(aes(x = tomatoMeter)) +
+  geom_histogram(binwidth = 1) +
+  scale_x_continuous(breaks = seq(0, 100, 5))
+```
+
+We can also produce a histogram of Tomato Meter ratings using the scores we calculated ourselves.
+
+```{r}
+#| label: fig-calc-hist
+#| fig-cap: Histogram of Tomato Meter ratings (calculated)
+scores_calc |>
+  ggplot(aes(x = tomatoMeter)) +
+  geom_histogram(binwidth = 1) +
+  scale_x_continuous(breaks = seq(0, 100, 5))
+```
+
+```{r}
+#| label: fig-calc-hist-alt
+#| fig-cap: Histogram of Tomato Meter ratings (calculated, sub-sample)
+movies_unique |>
+  filter(!is.na(tomatoMeter)) |>
+  select(-tomatoMeter) |>
+  inner_join(scores_calc, by = "id") |>
+  ggplot(aes(x = tomatoMeter)) +
+  geom_histogram(binwidth = 1) +
+  scale_x_continuous(breaks = seq(0, 100, 5))
+```
+
+@fig-hist looks very different from @fig-calc-hist.
+I'd guess that some criteria (e.g., minimum number of reviews) are imposed before including a Tomato Meter rating.
+@fig-calc-hist-alt uses the calculated ratings, but limited to the subsample with `tomatoMeter` scores in `movies`.
+It looks much more similar (though perhaps with too many 0 and 100 scores).
