@@ -20,10 +20,6 @@ library(tidyverse)
 library(duckdb)
 ```
 
-## Load data
-
-Read the data into the database.
-
 ```{r}
 db <- dbConnect(duckdb::duckdb())
 movies <- tbl(db, "read_csv_auto('archive/rotten_tomatoes_movies.csv')")
@@ -31,7 +27,7 @@ reviews <- tbl(db, "read_csv_auto('archive/rotten_tomatoes_movie_reviews.csv')")
 ```
 
 ```{r}
-movies |> count(id) |> count(n)
+movies |> count(id) |> count(n_rows = n)
 ```
 
 The result above tells us that are duplicate rows in the `movies` table.
@@ -104,8 +100,10 @@ scores_calc <-
   reviews_unique |>
   mutate(pos_review = as.integer(reviewState == "fresh")) |>
   group_by(id) |>
-  summarize(tomatoMeter = 100 * mean(pos_review, na.rm = TRUE),
+  summarize(num_positive = sum(pos_review, na.rm = TRUE),
             num_reviews = n()) |>
+  ungroup() |>
+  mutate(tomatoMeterCalc = 100 * num_positive / num_reviews) |>
   compute()
 ```
 
@@ -145,19 +143,23 @@ We can also produce a histogram of Tomato Meter ratings using the scores we calc
 #| label: fig-calc-hist
 #| fig-cap: Histogram of Tomato Meter ratings (calculated)
 scores_calc |>
-  ggplot(aes(x = tomatoMeter)) +
+  ggplot(aes(x = tomatoMeterCalc)) +
   geom_histogram(binwidth = 1) +
   scale_x_continuous(breaks = seq(0, 100, 5))
 ```
 
 ```{r}
+scores_calc_merged <-
+  movies_unique |>
+  filter(!is.na(tomatoMeter)) |>
+  inner_join(scores_calc, by = "id")
+```
+
+```{r}
 #| label: fig-calc-hist-alt
 #| fig-cap: Histogram of Tomato Meter ratings (calculated, sub-sample)
-movies_unique |>
-  filter(!is.na(tomatoMeter)) |>
-  select(-tomatoMeter) |>
-  inner_join(scores_calc, by = "id") |>
-  ggplot(aes(x = tomatoMeter)) +
+scores_calc_merged |>
+  ggplot(aes(x = tomatoMeterCalc)) +
   geom_histogram(binwidth = 1) +
   scale_x_continuous(breaks = seq(0, 100, 5))
 ```
@@ -166,3 +168,13 @@ movies_unique |>
 I'd guess that some criteria (e.g., minimum number of reviews) are imposed before including a Tomato Meter rating.
 @fig-calc-hist-alt uses the calculated ratings, but limited to the subsample with `tomatoMeter` scores in `movies`.
 It looks much more similar (though perhaps with too many 0 and 100 scores).
+
+```{r}
+scores_calc_merged |>
+  ggplot(aes(x = tomatoMeter, y = tomatoMeterCalc)) +
+  geom_point()
+```
+
+```{r}
+dbDisconnect(db, shutdown = TRUE)
+```
