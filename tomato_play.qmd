@@ -1,7 +1,12 @@
 ---
 title: "Quick look at Rotten Tomatoes data"
 author: "Ian D. Gow"
-format: pdf
+format: 
+  pdf:
+    toc: true
+  html:
+    toc: true
+    code-fold: true
 ---
 
 Here I assume that you have saved the data available [here](https://www.kaggle.com/datasets/andrezaza/clapper-massive-rotten-tomatoes-movies-and-reviews) in a `archive` folder under this project.
