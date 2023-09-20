@@ -1,0 +1,180 @@
+---
+title: "First pass analysis of discontinuities"
+author: "Ian D. Gow"
+format: 
+  html:
+    toc: true
+    code-fold: true
+  pdf:
+    colorlinks: true
+    geometry:
+      - left=2.5cm
+      - right=2.5cm
+    papersize: a4
+    mainfont: TeX Gyre Pagella
+    mathfont: TeX Gyre Pagella Math
+    csl: journal-of-financial-economics.csl
+---
+  
+  
+```{r}
+#| include: false
+#| message: false
+library(tidyverse)
+library(duckdb)
+library(conflicted)
+conflict_prefer("filter", "dplyr")
+```
+
+```{r}
+#| include: false
+#| warning: false
+db <- dbConnect(duckdb::duckdb())
+movies <- tbl(db, "read_csv_auto('archive/rotten_tomatoes_movies.csv')")
+reviews <- tbl(db, "read_csv_auto('archive/rotten_tomatoes_movie_reviews.csv')")
+
+reviews_unique <-
+  reviews |> 
+  distinct() 
+
+movies_unique <-
+  movies |> 
+  filter(!is.na(title)) |> 
+  distinct() 
+```
+
+```{r}
+#| include: false
+#| warning: true
+review_movies <-
+  reviews_unique |>
+  group_by(id) |>
+  summarize(min_date = min(creationDate),
+            max_date = max(creationDate))
+```
+
+```{r}
+#| include: false
+#| warning: true
+scores_calc <-
+  reviews_unique |>
+  mutate(pos_review = as.integer(reviewState == "fresh")) |>
+  group_by(id) |>
+  summarize(num_positive = sum(pos_review, na.rm = TRUE),
+            num_reviews = n()) |>
+  ungroup() |>
+  mutate(tomatoMeterCalc = 100 * num_positive / num_reviews) |>
+  compute()
+```
+
+```{r}
+#| include: false
+#| warning: true
+bin_data <-
+  scores_calc |>
+  left_join(movies_unique, by = "id", keep = TRUE, suffix = c("", "_movies")) |>
+  mutate(on_movies = !is.na(id_movies),
+         has_totato_meter = !is.na(tomatoMeter)) |>
+  filter(num_reviews >= 5, has_totato_meter) |>
+  inner_join(review_movies, by = "id") |>
+  count(num_reviews, num_positive) |>
+  compute()
+
+get_cutoff <- function(n, target = 60) {
+  scores <- 0:n
+  i <- min(which(round(scores/n * 100) >= target))
+  scores[i]
+}
+
+cutoffs <- 
+  scores_calc |>
+  distinct(num_reviews) |>
+  collect() |>
+  arrange(num_reviews) |>
+  rowwise() |>
+  mutate(cutoff = get_cutoff(num_reviews)) |>
+  copy_to(db, df = _, name = "cutoffs", overwrite = TRUE)
+```
+
+## Analysis of adjacent raw scores
+
+```{r}
+#| include: false
+num_reviews <- 72
+cutoff <- ceiling(0.595 * num_reviews)
+```
+
+Our first analysis examines the raw scores (i.e., number of positive reviews) around the cutoffs for "fresh" ratings based on Tomato Meter scores above 60.
+Note that at least 5 ratings are needed to have a Tomato Meter score, so we focus on movies with at least that many ratings.
+Because of rounding, effective cutoff is $59.5\%$.
+The cutoffs will vary by the number of reviews.
+For example, if there are `r num_reviews` reviews, we have $0.595 \times `r num_reviews` = `r 0.595 * num_reviews`$, so the cutoff number of positive reviews will be `r cutoff` ("meet").
+
+So  just to the left of the cutoff is `r cutoff - 1` positive reviews ("just below") and just to the right `r cutoff + 1` positive reviews ("above").
+If movie backers are somehow manipulating reviews to just meet the cutoffs, we would expect an unusual number of movies to land in the "meet" bin relative to the numbers in "just below" and "above".
+
+Analysis of cases with 100 or fewer reviews is shown in @tbl-bin.^[We restrict this analysis to such cases as the chances of a movie landing in exactly these bins decreases as the number of reviews goes up.]
+Analysis of cases more than 100 reviews is shown in @tbl-bin-100-plus.
+In neither case do we see compelling evidence of manipulation of the kind that would result in an excess number of movies in the "meet" bin.
+
+```{r}
+#| warning: true
+#| echo: false
+#| label: tbl-bin
+#| tbl-cap: Number of observations in bins around the cutoff
+bin_analysis <-
+  bin_data |>
+  inner_join(cutoffs, by = "num_reviews") |>
+  mutate(bin_diff = num_positive - cutoff,
+         bin = case_when(bin_diff == -2 ~ "Two below",
+                         bin_diff == -1 ~ "Just below",
+                         bin_diff ==  0 ~ "Meet",
+                         bin_diff ==  1 ~ "Above",
+                         bin_diff ==  2 ~ "Two above")) |>
+  filter(!is.na(bin))
+
+bin_analysis |>
+  filter(between(num_reviews, 5, 100)) |>
+  count(bin, bin_diff) |>
+  collect() |>
+  arrange(bin_diff) |>
+  mutate(bin = fct_inorder(bin)) |>
+  select(-bin_diff) |>
+  knitr::kable()
+```
+
+```{r}
+#| warning: true
+#| echo: false
+#| label: tbl-bin-100-plus
+#| tbl-cap: "Number of observations in bins around the cutoff (number of review over 100)"
+bin_analysis |>
+  filter(num_reviews > 100) |>
+  count(bin, bin_diff) |>
+  collect() |>
+  arrange(bin_diff) |>
+  mutate(bin = fct_inorder(bin)) |>
+  select(-bin_diff) |>
+  knitr::kable()
+```
+
+## Histogram analysis
+
+Our second analysis focuses on cases with at least 60 reviews and considers all bins with 30 raw points (i.e., number of "fresh" reviews) of the cutoff.^[We restrict this analysis to cases with at least 60 reviews, as bins with `bin_diff` equal to $-30$ and $30$ would not exist for, say, a movie with just (say) 55 reviews.]
+
+We define `bin_diff` as the number of "fresh" reviews minus the cutoff for each movie (where the cutoff is a function on the number of reviews, as discussed above).
+We then plot a histogram of `bin_diff`. 
+As with the analysis above, @fig-bin-diff provides no evidence of an excessive number of movies with `bin_diff` equal to zero.
+
+```{r}
+#| echo: false
+#| label: fig-bin-diff
+#| fig-cap: Histogram of `bin_diff`
+bin_data |>
+  filter(num_reviews > 60) |>
+  inner_join(cutoffs, by = "num_reviews") |>
+  mutate(bin_diff = num_positive - cutoff) |>
+  filter(abs(bin_diff) < 30) |>
+  ggplot(aes(x = bin_diff)) +
+  geom_histogram(binwidth = 1)
+```
