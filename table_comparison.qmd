@@ -1,0 +1,106 @@
+---
+title: "How does `movies` relate to `reviews`?"
+author: "Ian D. Gow"
+format: 
+  html:
+    toc: true
+    code-fold: true
+  pdf:
+    toc: true
+---
+  
+
+```{r}
+#| include: false
+#| message: false
+library(tidyverse)
+library(duckdb)
+library(conflicted)
+conflict_prefer("filter", "dplyr")
+```
+
+```{r}
+#| include: false
+db <- dbConnect(duckdb::duckdb())
+movies <- tbl(db, "read_csv_auto('archive/rotten_tomatoes_movies.csv')")
+reviews <- tbl(db, "read_csv_auto('archive/rotten_tomatoes_movie_reviews.csv')")
+```
+
+```{r}
+#| include: false
+reviews_unique <-
+  reviews |> 
+  distinct() 
+
+review_movies <-
+  reviews_unique |>
+  group_by(id) |>
+  summarize(min_date = min(creationDate),
+            max_date = max(creationDate))
+```
+
+```{r}
+movies_unique <-
+  movies |> 
+  filter(!is.na(title)) |> 
+  distinct() 
+```
+
+```{r}
+scores_calc <-
+  reviews_unique |>
+  mutate(pos_review = as.integer(reviewState == "fresh")) |>
+  group_by(id) |>
+  summarize(num_positive = sum(pos_review, na.rm = TRUE),
+            num_reviews = n()) |>
+  ungroup() |>
+  mutate(tomatoMeterCalc = 100 * num_positive / num_reviews) |>
+  compute()
+```
+
+```{r}
+#| include: false
+merged <-
+  scores_calc |>
+  left_join(movies_unique, by = "id", keep = TRUE, suffix = c("", "_movies")) |>
+  mutate(on_movies = !is.na(id_movies),
+         has_totato_meter = !is.na(tomatoMeter))
+```
+
+```{r}
+#| include: false
+unmatched_num <- merged |> filter(!on_movies) |> count() |> pull()
+matched_num <- merged |> filter(on_movies) |> count() |> pull()
+```
+
+There are `r prettyNum(unmatched_num)` movies on `reviews` and not on `movies` (versus `r prettyNum(matched_num, big.mark = ",")` that *are* on `movies`).
+None of these have `tomatoMeter` values or titles in `movies`.
+So we can probably just ignore these.
+
+But there are many observations on `reviews` that do not have `tomatoMeter` values in `movies`.
+
+```{r}
+merged |> 
+  count(num_reviews, has_totato_meter) |>
+  pivot_wider(names_from = has_totato_meter, values_from = n) |>
+  collect(n = 10) |>
+  knitr::kable()
+```
+
+```{r}
+merged |>
+  filter(num_reviews >= 5, !has_totato_meter) |>
+  inner_join(review_movies, by = "id") |>
+  count(year = year(min_date)) |>
+  arrange(desc(n))
+```
+```{r}
+merged |>
+  filter(num_reviews >= 5, !has_totato_meter) |>
+  inner_join(review_movies, by = "id") |>
+  filter(year(min_date) == 2000)
+```
+```{r}
+#| include: false
+dbDisconnect(db, shutdown = TRUE)
+```
