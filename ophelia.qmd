@@ -1,0 +1,151 @@
+---
+title: "Focus on Ophelia (2019)"
+author: "Ian D. Gow"
+format: 
+  html:
+    toc: true
+    code-fold: true
+  pdf:
+    colorlinks: true
+    geometry:
+      - left=2.5cm
+      - right=2.5cm
+    papersize: a4
+    mainfont: TeX Gyre Pagella
+    mathfont: TeX Gyre Pagella Math
+    csl: journal-of-financial-economics.csl
+---
+
+```{r}
+#| include: false
+#| message: false
+library(tidyverse)
+library(duckdb)
+library(conflicted)
+library(dbplyr)
+conflict_prefer("filter", "dplyr")
+```
+
+```{r}
+#| include: false
+#| warning: false
+db <- dbConnect(duckdb::duckdb())
+movies <- tbl(db, "read_csv_auto('archive/rotten_tomatoes_movies.csv')")
+reviews <- tbl(db, "read_csv_auto('archive/rotten_tomatoes_movie_reviews.csv')")
+
+reviews_unique <-
+  reviews |> 
+  distinct() 
+
+movies_unique <-
+  movies |> 
+  filter(!is.na(title)) |> 
+  distinct() 
+```
+
+```{r}
+#| echo: false
+release_date <- 
+  movies_unique |>
+  filter(id == "ophelia_2019") |>
+  select(releaseDateTheaters) |>
+  pull()
+
+ophelia_data <- 
+  reviews_unique |> 
+  filter(id == "ophelia_2019")
+```
+
+```{r}
+#| eval: false
+#| include: false
+ophelia_data |> 
+  window_order(creationDate) |> 
+  mutate(is_fresh = as.integer(reviewState == "fresh")) |> 
+  mutate(avg_rating = 100 * cummean(is_fresh), 
+         num_ratings = cumsum(as.integer(!is.na(is_fresh)))) |> 
+  filter(num_ratings >= 10) |>
+  select(creationDate, avg_rating, num_ratings) |>
+  pivot_longer(cols = -creationDate)
+```
+
+From [Vulture](https://www.vulture.com/article/rotten-tomatoes-movie-rating.html):
+
+> Between October 2018 and January 2019, Rotten Tomatoes added eight reviews to Ophelia’s score. 
+> Seven were favorable, and most came from critics who have reviewed at least one other Bunker 15 movie.
+> The writer of a negative review says that Bunker 15 lobbied them to change it; if the critic wanted to "give it a (barely) overall positive then I do know the editors at Rotten Tomatoes and can get it switched," a Bunker 15 employee wrote. 
+> I also discovered another negative review of Ophelia from this period that was not counted by Rotten Tomatoes, by a writer whose positive reviews of other Bunker 15 films have been recorded by the aggregator. 
+> Ophelia climbed the Tomatometer to 62 percent, flipping from rotten to "fresh." 
+The next month, the distributor IFC Films announced that it had acquired Ophelia for release in the U.S.
+
+Some of these phenomena can be seen in @fig-reviews-time
+
+```{r}
+#| echo: false
+plot_data <-
+  ophelia_data |> 
+  window_order(creationDate) |> 
+  mutate(is_fresh = as.integer(reviewState == "fresh")) |> 
+  mutate(avg_rating = 100 * cummean(is_fresh), 
+         num_ratings = cumsum(as.integer(!is.na(is_fresh)))) |> 
+  filter(num_ratings >= 10) 
+```
+
+```{r}
+#| echo: false
+#| eval: true 
+#| fig-height: 4
+#| label: fig-reviews-time
+#| layout-nrow: 2
+#| fig-cap: "Ophelia on Rotten Tomatoes over time"
+#| fig-subcap: 
+#|   - Cumulative number of reviews
+#|   - Tomato Meter
+plot_data |> 
+  ggplot(aes(x = creationDate)) + 
+  geom_line(aes(y = num_ratings)) +
+  geom_vline(xintercept = release_date, color = "red") +
+  scale_x_date(date_minor_breaks = "1 month")
+ 
+plot_data|> 
+  group_by(creationDate) |>
+  filter(num_ratings == max(num_ratings, na.rm = TRUE)) |>
+  ungroup() |>
+  ggplot(aes(x = creationDate)) + 
+  geom_line(aes(y = avg_rating), color = "blue") +
+  geom_vline(xintercept = release_date, color = "red") +
+  geom_hline(yintercept = 59.5, color = "black") +
+  scale_x_date(date_minor_breaks = "1 month")
+```
+```{r}
+#| echo: false
+#| eval: true 
+#| fig-height: 4
+#| label: fig-reviews-zoom
+#| layout-nrow: 2
+#| fig-cap: "Ophelia on Rotten Tomatoes around release"
+#| fig-subcap: 
+#|   - Cumulative number of reviews
+#|   - Tomato Meter
+plot_data |> 
+  filter(between(creationDate, "2019-06-01", "2019-07-31")) |>
+  ggplot(aes(x = creationDate)) + 
+  geom_line(aes(y = num_ratings)) +
+  geom_vline(xintercept = release_date, color = "red") +
+  scale_x_date(date_minor_breaks = "1 day")
+ 
+plot_data |> 
+  filter(between(creationDate, "2019-06-01", "2019-07-31")) |>
+  group_by(creationDate) |>
+  filter(num_ratings == max(num_ratings, na.rm = TRUE)) |>
+  ungroup() |>
+  ggplot(aes(x = creationDate)) + 
+  geom_line(aes(y = avg_rating), color = "blue") +
+  geom_vline(xintercept = release_date, color = "red") +
+  geom_hline(yintercept = 59.5, color = "black") +
+  scale_x_date(date_minor_breaks = "1 day")
+```
+
+
+
+
