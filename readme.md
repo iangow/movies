@@ -26,7 +26,7 @@ When starting out with GitHub, I would recommend avoiding that complication if y
 [^2]: Packages are installed on your hard drive with `install.packages()`, but loaded into memory with `library()`.
 [^3]: According to [GitHub](https://github.com/git-guides/git-clone), "the `git clone` command is used to create a copy of a specific repository or branch within a repository."
 Perhaps the easiest way to clone for novices is to install GitHub Desktop on your computer and use the "Open with GitHub Desktop" option under the "Code" button seen [here](https://github.com/iangow/movies).
-[^4]: The `tinytex` package is a good option for getting a minimal installation going on your computer.]
+[^4]: The `tinytex` package is a good option for getting a minimal installation going on your computer.
 [^5]: To get these fonts on MacOS, I think you download the associated `.otf` files and install them by double-clicking.
 Maybe it works similarly on Windows.
 There are `.otf` files [here](https://www.ctan.org/tex-archive/fonts/tex-gyre-math/opentype) for the math font and [here](https://www.ctan.org/tex-archive/fonts/tex-gyre/opentype) for the "regular" fonts.
