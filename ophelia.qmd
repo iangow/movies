@@ -24,6 +24,7 @@ library(duckdb)
 library(conflicted)
 library(dbplyr)
 conflict_prefer("filter", "dplyr")
+conflict_prefer("sql", "dbplyr")
 ```
 
 ```{r}
@@ -82,13 +83,27 @@ Some of these phenomena can be seen in @fig-reviews-time
 
 ```{r}
 #| echo: false
-plot_data <-
+ophelia_dates <-
   ophelia_data |> 
+  summarize(min_date = min(creationDate, na.rm = TRUE),
+            max_date = max(creationDate, na.rm = TRUE)) |>
+    mutate(dates = generate_series(as.POSIXct(min_date), 
+                                   as.POSIXct(max_date), 
+                                   sql("'1 day'::interval"))) |>
+  mutate(creationDate = as.Date(unnest(dates))) |>
+  select(creationDate)
+  
+plot_data <-
+  ophelia_dates |>
+  left_join(ophelia_data, by = "creationDate") |> 
   window_order(creationDate) |> 
   mutate(is_fresh = as.integer(reviewState == "fresh")) |> 
   mutate(avg_rating = 100 * cummean(is_fresh), 
          num_ratings = cumsum(as.integer(!is.na(is_fresh)))) |> 
-  filter(num_ratings >= 10) 
+  filter(num_ratings >= 10) |>
+  group_by(creationDate) |>
+  filter(num_ratings == max(num_ratings, na.rm = TRUE)) |>
+  ungroup() 
 ```
 
 ```{r}
@@ -108,9 +123,6 @@ plot_data |>
   scale_x_date(date_minor_breaks = "1 month")
  
 plot_data|> 
-  group_by(creationDate) |>
-  filter(num_ratings == max(num_ratings, na.rm = TRUE)) |>
-  ungroup() |>
   ggplot(aes(x = creationDate)) + 
   geom_line(aes(y = avg_rating), color = "blue") +
   geom_vline(xintercept = release_date, color = "red") +
@@ -136,9 +148,6 @@ plot_data |>
  
 plot_data |> 
   filter(between(creationDate, "2019-06-01", "2019-07-31")) |>
-  group_by(creationDate) |>
-  filter(num_ratings == max(num_ratings, na.rm = TRUE)) |>
-  ungroup() |>
   ggplot(aes(x = creationDate)) + 
   geom_line(aes(y = avg_rating), color = "blue") +
   geom_vline(xintercept = release_date, color = "red") +
