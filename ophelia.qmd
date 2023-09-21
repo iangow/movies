@@ -72,12 +72,11 @@ ophelia_data |>
 
 From [Vulture](https://www.vulture.com/article/rotten-tomatoes-movie-rating.html):
 
-> Between October 2018 and January 2019, Rotten Tomatoes added eight reviews to Ophelia’s score. 
+> Between October 2018 and January 2019, Rotten Tomatoes added eight reviews to Ophelia's score.
 > Seven were favorable, and most came from critics who have reviewed at least one other Bunker 15 movie.
-> The writer of a negative review says that Bunker 15 lobbied them to change it; if the critic wanted to "give it a (barely) overall positive then I do know the editors at Rotten Tomatoes and can get it switched," a Bunker 15 employee wrote. 
-> I also discovered another negative review of Ophelia from this period that was not counted by Rotten Tomatoes, by a writer whose positive reviews of other Bunker 15 films have been recorded by the aggregator. 
-> Ophelia climbed the Tomatometer to 62 percent, flipping from rotten to "fresh." 
-The next month, the distributor IFC Films announced that it had acquired Ophelia for release in the U.S.
+> The writer of a negative review says that Bunker 15 lobbied them to change it; if the critic wanted to "give it a (barely) overall positive then I do know the editors at Rotten Tomatoes and can get it switched," a Bunker 15 employee wrote.
+> I also discovered another negative review of Ophelia from this period that was not counted by Rotten Tomatoes, by a writer whose positive reviews of other Bunker 15 films have been recorded by the aggregator.
+> Ophelia climbed the Tomatometer to 62 percent, flipping from rotten to "fresh." The next month, the distributor IFC Films announced that it had acquired Ophelia for release in the U.S.
 
 Some of these phenomena can be seen in @fig-reviews-time
 
@@ -129,6 +128,7 @@ plot_data|>
   geom_hline(yintercept = 59.5, color = "black") +
   scale_x_date(date_minor_breaks = "1 month")
 ```
+
 ```{r}
 #| echo: false
 #| eval: true 
@@ -154,7 +154,3 @@ plot_data |>
   geom_hline(yintercept = 59.5, color = "black") +
   scale_x_date(date_minor_breaks = "1 day")
 ```
-
-
-
-
