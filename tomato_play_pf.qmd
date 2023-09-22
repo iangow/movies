@@ -1,0 +1,146 @@
+---
+title: "Quick look at Rotten Tomatoes data"
+author: "Patrick J. Ferguson"
+format: 
+  pdf:
+    toc: true
+  html:
+    toc: true
+    code-fold: true
+---
+
+Here I assume that you have saved the data available [here](https://www.kaggle.com/datasets/andrezaza/clapper-massive-rotten-tomatoes-movies-and-reviews) in a `archive` folder under this project.
+
+I will use the `tidyverse` package for analysis.
+I will use `duckdb` here because it makes queries very fast with very little overhead.^[Use `install.packages(c("tidyverse", "duckdb"))` if necessary.]
+
+```{r}
+#| message: false
+library(tidyverse)
+library(duckdb)
+```
+
+```{r}
+db <- dbConnect(duckdb::duckdb())
+movies <- tbl(db, "read_csv_auto('archive/rotten_tomatoes_movies.csv')")
+reviews <- tbl(db, "read_csv_auto('archive/rotten_tomatoes_movie_reviews.csv')")
+```
+
+```{r}
+movies |> count(id) |> count(n_rows = n)
+```
+
+The result above tells us that are duplicate rows in the `movies` table.
+If we focus on those with a value in `title`, it seems there are complete duplicates (i.e., all rows are duplicated).
+So we can make a new table with unique entries.
+
+```{r}
+movies_unique <-
+  movies |> 
+  filter(!is.na(title)) |> 
+  distinct() 
+```
+
+Now we have no duplicates.
+
+```{r}
+movies_unique |> 
+  count(id) |> 
+  filter(n > 1) |>
+  count() |>
+  pull()
+```
+
+A quick look at the data.
+
+```{r}
+movies_unique |>
+  filter(!is.na(tomatoMeter)) |>
+  count(tomatoMeter) |> 
+  arrange(tomatoMeter) |>
+  filter(tomatoMeter > 55) 
+```
+
+There are also some duplicates in `reviews`.
+Let's make `reviews_unique`:
+
+```{r}
+reviews_unique <-
+  reviews |> 
+  distinct() 
+
+reviews_unique |>
+  count(reviewId) |> 
+  filter(n > 1) |>
+  inner_join(reviews, by = "reviewId") |>
+  count() |>
+  pull()
+```
+
+What values does `reviewState` take?
+Are there missing values?
+
+```{r}
+reviews_unique |>
+  count(reviewState) |>
+  collect()
+
+reviews_unique |>
+  filter(is.na(reviewState)) |>
+  count() |>
+  pull()
+```
+
+## Calculating Tomato Score
+
+Let's calculate tomato score.
+
+```{r}
+scores_calc <-
+  reviews_unique |>
+  mutate(pos_review = as.integer(reviewState == "fresh")) |>
+  group_by(id) |>
+  summarize(num_positive = sum(pos_review, na.rm = TRUE),
+            num_reviews = n()) |>
+  ungroup() |>
+  mutate(tomatoMeterCalc = 100 * num_positive / num_reviews) |>
+  compute()
+```
+
+Now let's compare calculated values with reported values for a sample.
+
+```{r}
+sample <- 
+  tibble(id = c("american_werewolf_in_paris",
+                "imperium",
+                "welcome_to_happiness",
+                "blood_glacier")) |>
+  copy_to(db, df = _, name = "sample", overwrite = TRUE)
+```
+
+```{r}
+sample |>
+  inner_join(movies_unique, by = "id") |>
+  select(id, title, tomatoMeter) |>
+  inner_join(scores_calc, by = "id")
+```
+
+Pat: Let's compare calculated values with reported value for another sample.
+
+```{r}
+sample_pf <- 
+  tibble(id = c("jurassic_park",
+                "jaws")) |>
+  copy_to(db, df = _, name = "sample_pf", overwrite = TRUE)
+```
+
+```{r}
+sample_pf |>
+  inner_join(movies_unique, by = "id") |>
+  select(id, title, tomatoMeter) |>
+  inner_join(scores_calc, by = "id")
+```
+
+```{r}
+dbDisconnect(db, shutdown = TRUE)
+```
