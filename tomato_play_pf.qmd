@@ -130,7 +130,8 @@ Pat: Let's compare calculated values with reported value for another sample.
 ```{r}
 sample_pf <- 
   tibble(id = c("jurassic_park",
-                "jaws")) |>
+                "jaws",
+                "titanic")) |>
   copy_to(db, df = _, name = "sample_pf", overwrite = TRUE)
 ```
 
