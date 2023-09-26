@@ -3,9 +3,9 @@ title: "Quick look at Rotten Tomatoes data"
 author: "Patrick J. Ferguson"
 format: 
   pdf:
-    toc: true
+    toc: false
   html:
-    toc: true
+    toc: false 
     code-fold: true
 ---
 
