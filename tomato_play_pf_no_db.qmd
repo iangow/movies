@@ -11,28 +11,26 @@ format:
 
 Here I assume that you have saved the data available [here](https://www.kaggle.com/datasets/andrezaza/clapper-massive-rotten-tomatoes-movies-and-reviews) in a `archive` folder under this project.
 
-I will use the `tidyverse` package for analysis.
-I will use `duckdb` here because it makes queries very fast with very little overhead.^[Use `install.packages(c("tidyverse", "duckdb"))` if necessary.]
+I will use the `tidyverse` package for analysis. I will use `duckdb` here because it makes queries very fast with very little overhead.[^1]
+
+[^1]: Use `install.packages(c("tidyverse", "duckdb"))` if necessary.
 
 ```{r}
 #| message: false
 library(tidyverse)
-library(duckdb)
 ```
 
 ```{r}
-db <- dbConnect(duckdb::duckdb())
-movies <- tbl(db, "read_csv_auto('archive/rotten_tomatoes_movies.csv')")
-reviews <- tbl(db, "read_csv_auto('archive/rotten_tomatoes_movie_reviews.csv')")
+#| message: false
+movies <- read_csv('archive/rotten_tomatoes_movies.csv')
+reviews <- read_csv('archive/rotten_tomatoes_movie_reviews.csv')
 ```
 
 ```{r}
 movies |> count(id) |> count(n_rows = n)
 ```
 
-The result above tells us that are duplicate rows in the `movies` table.
-If we focus on those with a value in `title`, it seems there are complete duplicates (i.e., all rows are duplicated).
-So we can make a new table with unique entries.
+The result above tells us that are duplicate rows in the `movies` table. If we focus on those with a value in `title`, it seems there are complete duplicates (i.e., all rows are duplicated). So we can make a new table with unique entries.
 
 ```{r}
 movies_unique <-
@@ -61,8 +59,7 @@ movies_unique |>
   filter(tomatoMeter > 55) 
 ```
 
-There are also some duplicates in `reviews`.
-Let's make `reviews_unique`:
+There are also some duplicates in `reviews`. Let's make `reviews_unique`:
 
 ```{r}
 reviews_unique <-
@@ -77,8 +74,7 @@ reviews_unique |>
   pull()
 ```
 
-What values does `reviewState` take?
-Are there missing values?
+What values does `reviewState` take? Are there missing values?
 
 ```{r}
 reviews_unique |>
@@ -114,8 +110,7 @@ sample <-
   tibble(id = c("american_werewolf_in_paris",
                 "imperium",
                 "welcome_to_happiness",
-                "blood_glacier")) |>
-  copy_to(db, df = _, name = "sample", overwrite = TRUE)
+                "blood_glacier"))
 ```
 
 ```{r}
@@ -131,8 +126,7 @@ Pat: Let's compare calculated values with reported value for another sample.
 sample_pf <- 
   tibble(id = c("jurassic_park",
                 "jaws",
-                "titanic")) |>
-  copy_to(db, df = _, name = "sample_pf", overwrite = TRUE)
+                "titanic"))
 ```
 
 ```{r}
@@ -140,8 +134,4 @@ sample_pf |>
   inner_join(movies_unique, by = "id") |>
   select(id, title, tomatoMeter) |>
   inner_join(scores_calc, by = "id")
-```
-
-```{r}
-dbDisconnect(db, shutdown = TRUE)
 ```
