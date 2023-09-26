@@ -31,8 +31,8 @@ conflict_prefer("sql", "dbplyr")
 #| include: false
 #| warning: false
 db <- dbConnect(duckdb::duckdb())
-movies <- tbl(db, "read_csv_auto('archive/rotten_tomatoes_movies.csv')")
-reviews <- tbl(db, "read_csv_auto('archive/rotten_tomatoes_movie_reviews.csv')")
+movies <- tbl(db, "read_parquet('archive/movies.parquet')")
+reviews <- tbl(db, "read_parquet('archive/reviews.parquet')")
 
 reviews_unique <-
   reviews |> 
