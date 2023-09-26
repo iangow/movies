@@ -1,7 +1,9 @@
 # Rotten Tomatoes data
 
-The code in this repository assumes that you have saved the data available [here](https://www.kaggle.com/datasets/andrezaza/clapper-massive-rotten-tomatoes-movies-and-reviews) in a `archive` folder under this project.
+Some of the code in this repository assumes that you have saved the data available [here](https://www.kaggle.com/datasets/andrezaza/clapper-massive-rotten-tomatoes-movies-and-reviews) in a `archive` folder under this project.
 These data comprise two CSV files: `rotten_tomatoes_movies.csv` and `rotten_tomatoes_movie_reviews.csv`.
+Other code relies on Parquet versions of the CSV files, which are included here.
+Note that these files are stored using [Git LFS](https://git-lfs.com), which may require separate installation.
 
 The code in this repository uses the `tidyverse` package for analysis.
 It also uses `duckdb`, because DuckDB makes queries very fast with very little overhead.[^1]
