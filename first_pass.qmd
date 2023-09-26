@@ -40,6 +40,7 @@ reviews_unique <-
 movies_unique <-
   movies |> 
   filter(!is.na(title)) |> 
+  filter(year(coalesce(releaseDateTheaters, releaseDateStreaming)) > 2010) |>
   distinct() 
 ```
 
