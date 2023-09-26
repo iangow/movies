@@ -9,8 +9,6 @@ format:
     code-fold: true
 ---
 
-Here I assume that you have saved the data available [here](https://www.kaggle.com/datasets/andrezaza/clapper-massive-rotten-tomatoes-movies-and-reviews) in a `archive` folder under this project.
-
 I will use the `tidyverse` package for analysis.
 I will use `duckdb` here because it makes queries very fast with very little overhead.^[Use `install.packages(c("tidyverse", "duckdb"))` if necessary.]
 
