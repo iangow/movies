@@ -78,7 +78,7 @@ From [Vulture](https://www.vulture.com/article/rotten-tomatoes-movie-rating.html
 > I also discovered another negative review of Ophelia from this period that was not counted by Rotten Tomatoes, by a writer whose positive reviews of other Bunker 15 films have been recorded by the aggregator.
 > Ophelia climbed the Tomatometer to 62 percent, flipping from rotten to "fresh." The next month, the distributor IFC Films announced that it had acquired Ophelia for release in the U.S.
 
-Some of these phenomena can be seen in @fig-reviews-time
+Some of these phenomena can be seen in @fig-reviews-time below.
 
 ```{r}
 #| echo: false
